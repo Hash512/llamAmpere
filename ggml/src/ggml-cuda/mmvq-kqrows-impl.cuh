@@ -268,6 +268,13 @@ static __global__ void mul_mat_vec_q_kqrows(
     }
 }
 
+// static shared memory of the cross-warp reduction; ptxas rejects more than 48 KiB per CTA (CUDA 13 checks every
+// instantiation), so shapes over the cap are never compiled. kqrows_pick keeps runtime requests under it.
+template <int ncols_dst, int rows, int nwarps>
+static constexpr bool kqrows_fits_shared() {
+    return (nwarps-1 > 0 ? nwarps-1 : 1) * ncols_dst * rows * WARP_SIZE * (int) sizeof(float) <= 48*1024;
+}
+
 template <ggml_type type, int ncols_dst, int rows>
 static void kqrows_launch_nw(const void * vx, const block_q8_1 * y, float * dst,
         int ncols_x, int nrows_x, int stride_row_x, int stride_col_y, int stride_col_dst, int nwarps, cudaStream_t stream) {
@@ -282,8 +289,12 @@ static void kqrows_launch_nw(const void * vx, const block_q8_1 * y, float * dst,
             mul_mat_vec_q_kqrows<type, ncols_dst, rows, 4><<<grid, block, 0, stream>>>(vx, y, dst, ncols_x, nrows_x, stride_row_x, stride_col_y, stride_col_dst);
         } break;
         case 8: {
-            const dim3 block(WARP_SIZE, 8, 1);
-            mul_mat_vec_q_kqrows<type, ncols_dst, rows, 8><<<grid, block, 0, stream>>>(vx, y, dst, ncols_x, nrows_x, stride_row_x, stride_col_y, stride_col_dst);
+            if constexpr (kqrows_fits_shared<ncols_dst, rows, 8>()) {
+                const dim3 block(WARP_SIZE, 8, 1);
+                mul_mat_vec_q_kqrows<type, ncols_dst, rows, 8><<<grid, block, 0, stream>>>(vx, y, dst, ncols_x, nrows_x, stride_row_x, stride_col_y, stride_col_dst);
+            } else {
+                GGML_ABORT("kqrows: 8 warps x %d rows x width %d exceeds 48 KiB shared memory", rows, ncols_dst);
+            }
         } break;
         default:
             GGML_ABORT("kqrows: nwarps must be 2, 4 or 8");

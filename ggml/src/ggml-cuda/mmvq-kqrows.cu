@@ -111,6 +111,10 @@ static kqrows_cell kqrows_pick(int ti, ggml_type type, int64_t nrows_x, int64_t 
     } else if (cell.nwarps == 0) {
         cell.nwarps = (int8_t) kqrows_table_nwarps(type, (int) ncols_dst);
     }
+    // 8 warps at 8 rows and widths 7..8 would need more than 48 KiB of reduction scratch (not compiled): use 4
+    if (cell.nwarps == 8 && 7 * ncols_dst * cell.rows * WARP_SIZE * (int64_t) sizeof(float) > 48*1024) {
+        cell.nwarps = 4;
+    }
     return cell;
 }
 

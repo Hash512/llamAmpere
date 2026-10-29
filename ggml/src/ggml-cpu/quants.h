@@ -4,6 +4,7 @@
 #include "ggml-common.h"
 
 #include "ggml.h"
+#include "ggml-backend.h"
 
 // GGML CPU internal header
 
@@ -13,7 +14,8 @@ extern "C" {
 
 // Quantization
 // One weight row, up to eight independent activation rows. Returns false if unavailable.
-bool ggml_vec_dot_iq_grouped(enum ggml_type type, int n, const void * vx, const void * const * vy, float * s, int nr);
+// exported: the CUDA backend's CPU expert split calls it from another library
+GGML_BACKEND_API bool ggml_vec_dot_iq_grouped(enum ggml_type type, int n, const void * vx, const void * const * vy, float * s, int nr);
 #if defined(__AVX2__)
 bool ggml_vec_dot_iq_grouped_avx2(enum ggml_type type, int n, const void * vx, const void * const * vy, float * s, int nr);
 #endif
