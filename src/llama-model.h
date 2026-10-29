@@ -840,7 +840,7 @@ struct llama_model {
 
     void print_info() const;
 
-    ggml_backend_dev_t dev_layer(int il) const;
+    LLAMA_API ggml_backend_dev_t dev_layer(int il) const; // also called by the server's setup report
     ggml_backend_dev_t dev_output() const;
 
     ggml_backend_buffer_type_t select_buft(int il) const;
