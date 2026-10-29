@@ -22,6 +22,16 @@
 // | 2 | 4 | 8; GGML_CUDA_KQ_ROWS_TYPES = comma list of q4_K,q5_K,q6_K (default all three); GGML_CUDA_KQ_ROWS_MIN_N /
 // _MAX_N (default 2 / 8).
 
+// The CTA parks the partial sums of warps 1.. in static shared memory, which is at most 48 KiB on every NVIDIA card.
+// 8 warps x 8 rows at 7 or 8 columns exceed it (ptxas refuses those kernels), so they are not built, and a forced
+// row count or warp count that would need them keeps the current route.
+static constexpr int ggml_cuda_kqrows_shared_bytes(int ncols_dst, int rows, int nwarps) {
+    return (nwarps > 1 ? nwarps - 1 : 1) * ncols_dst * rows * WARP_SIZE * (int) sizeof(float);
+}
+static constexpr bool ggml_cuda_kqrows_fits(int ncols_dst, int rows, int nwarps) {
+    return ggml_cuda_kqrows_shared_bytes(ncols_dst, rows, nwarps) <= 48 * 1024;
+}
+
 // True when the row kernel takes this product (switch on, type and width enabled, a table cell or a forced row count).
 bool ggml_cuda_kqrows_wants(ggml_type type, int cc, int64_t ncols_x, int64_t nrows_x, int64_t ncols_dst);
 

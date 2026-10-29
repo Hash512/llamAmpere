@@ -111,6 +111,9 @@ static kqrows_cell kqrows_pick(int ti, ggml_type type, int64_t nrows_x, int64_t 
     } else if (cell.nwarps == 0) {
         cell.nwarps = (int8_t) kqrows_table_nwarps(type, (int) ncols_dst);
     }
+    if (!ggml_cuda_kqrows_fits((int) ncols_dst, cell.rows, cell.nwarps)) {
+        cell.rows = 0; // not built (see ggml_cuda_kqrows_fits)
+    }
     return cell;
 }
 
