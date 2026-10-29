@@ -44,6 +44,16 @@
 
 namespace {
 
+// Acquire load of an expert address the card side publishes. MSVC has no __atomic builtins; a volatile read there is
+// an acquire load on x64 (/volatile:ms, the default), the only target CUDA builds for on Windows.
+inline const void * moe_cs_load_acquire(const void * const * p) {
+#if defined(_MSC_VER) && !defined(__clang__)
+    return *(const void * const volatile *) p;
+#else
+    return __atomic_load_n(p, __ATOMIC_ACQUIRE);
+#endif
+}
+
 using clk = std::chrono::steady_clock;
 
 int env_int(const char * name, int def, int lo, int hi) {
@@ -458,7 +468,7 @@ int items_of(const pool_state & s, int phase) {
 }
 
 const char * role_row(pool_state & s, const role_math & m, int expert, int64_t row) {
-    const void * base = __atomic_load_n(&m.r.src[expert], __ATOMIC_ACQUIRE);
+    const void * base = moe_cs_load_acquire(&m.r.src[expert]);
     if (!base) { return nullptr; }
     return (const char *) base + (size_t) row * m.r.row_bytes;
     (void) s;
@@ -1060,6 +1070,9 @@ bool moe_cs_layer_ok(int layer) {
 // was ready to run but another task held its cpu. The probe reads it before and after its timed jobs, so CPU contention
 // from other programs on the pool's cpus shows up in every log (0 when schedstat is missing).
 static double moe_cs_runq_wait_ns() {
+#if !defined(__linux__)
+    return 0.0;   // no schedstat outside Linux
+#else
     double sum = 0.0;
     DIR * d = opendir("/proc/self/task");
     if (!d) { return 0.0; }
@@ -1075,6 +1088,7 @@ static double moe_cs_runq_wait_ns() {
     }
     closedir(d);
     return sum;
+#endif
 }
 
 bool moe_cs_probe(double * route_ns, double * fixed_ns) {
@@ -1094,7 +1108,7 @@ bool moe_cs_probe(double * route_ns, double * fixed_ns) {
     std::vector<int> experts;
     for (int e = 0; e < (int) L.role[0].r.n_expert && experts.size() < 64; ++e) {
         bool all = true;
-        for (int k = 0; k < 3; ++k) { all = all && __atomic_load_n(&L.role[k].r.src[e], __ATOMIC_ACQUIRE) != nullptr; }
+        for (int k = 0; k < 3; ++k) { all = all && moe_cs_load_acquire(&L.role[k].r.src[e]) != nullptr; }
         if (all) { experts.push_back(e); }
     }
     if (experts.size() < 4) { return false; }

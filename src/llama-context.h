@@ -73,10 +73,10 @@ struct llama_context {
     int32_t compress_sj_kvarn_idle(llama_seq_id seq_id, llama_pos accepted_end, llama_pos keep_from = -1);
 
 
-    const llama_model   & get_model()   const;
-    const llama_cparams & get_cparams() const;
+    LLAMA_API const llama_model   & get_model()   const;
+    LLAMA_API const llama_cparams & get_cparams() const;
 
-    ggml_backend_sched_t get_sched() const;
+    LLAMA_API ggml_backend_sched_t get_sched() const;
     int b1_status() const {
         if (!b1_tried) { return -1; }
         if (!b1 || moe_cache) { return 0; }
@@ -96,7 +96,7 @@ struct llama_context {
     uint32_t n_threads_batch() const;
 
     llama_memory_t get_memory() const;
-    const llama_sj_kvarn_config * get_sj_kvarn() const;
+    LLAMA_API const llama_sj_kvarn_config * get_sj_kvarn() const;
 
     // return the *effective* K/V cache tensor types currently in use by the memory object.
     // this can differ from what was requested via llama_context_params.type_k/type_v because
